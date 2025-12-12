@@ -231,7 +231,6 @@ android {
 
     kotlinOptions {
         freeCompilerArgs = ["-opt-in=kotlin.RequiresOptIn"]
-        freeCompilerArgs += ["-Xstring-concat=inline"]
         jvmTarget = "17"
     }
 
