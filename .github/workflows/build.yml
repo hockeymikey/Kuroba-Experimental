@@ -37,7 +37,7 @@ jobs:
       env:
         ENCODED_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
-        echo "$ENCODED_KEYSTORE" | base64 -d > kurobaex.jks
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > kurobaex.jks
 
     - name: Build and Sign APK
       # Note: I removed 'cd Kuroba' assuming your build.gradle is in the root.
@@ -46,9 +46,9 @@ jobs:
         chmod +x ./gradlew
         ./gradlew assembleBetaRelease \
           -Pandroid.injected.signing.store.file=$(pwd)/kurobaex.jks \
-          -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
-          -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
-          -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+          -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+          -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+          -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
 
     - name: Create Release
       env:
