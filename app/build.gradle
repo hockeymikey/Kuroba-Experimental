@@ -230,7 +230,6 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8.toString()
         freeCompilerArgs = ["-opt-in=kotlin.RequiresOptIn"]
         jvmTarget = "17"
     }
@@ -243,13 +242,13 @@ android {
         kotlinCompilerExtensionVersion = versions.compose_compiler_version
     }
 
-    lintOptions {
-        checkReleaseBuilds false
-        abortOnError false
-    }
 
     kapt {
         correctErrorTypes = true
+    }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
     }
 }
 

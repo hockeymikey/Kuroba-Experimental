@@ -98,8 +98,8 @@ public class GenericWebViewAuthenticationLayout
     }
 
     private void onAllText(String text) {
-        boolean retry = text != null && text.contains(authentication.retryText);
-        boolean success = text != null && text.contains(authentication.successText);
+        boolean retry = text != null && authentication.retryText != null && text.contains(authentication.retryText);
+        boolean success = text != null && authentication.successText != null && text.contains(authentication.successText);
 
         if (retry) {
             if (!resettingFromFoundText) {

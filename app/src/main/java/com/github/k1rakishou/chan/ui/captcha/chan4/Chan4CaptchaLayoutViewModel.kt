@@ -374,10 +374,28 @@ class Chan4CaptchaLayoutViewModel : BaseViewModel() {
       throw BadStatusResponseException(response.code)
     }
 
-    val captchaInfoRawString = response.body?.string()
-    if (captchaInfoRawString == null) {
+    val captchaInfoRawStringUn = response.body?.string()
+    if (captchaInfoRawStringUn == null) {
       throw EmptyBodyResponseException()
     }
+
+      val captchaInfoRawString = if (captchaInfoRawStringUn != null && captchaInfoRawStringUn.contains("\"twister\":")) {
+          try {
+              // Quick hack to unwrap: Parse as generic map or regex extract
+              // A safer way if you have JSONObject available:
+              val rootObj = org.json.JSONObject(captchaInfoRawStringUn)
+              if (rootObj.has("twister")) {
+                  rootObj.getJSONObject("twister").toString()
+              } else {
+                  captchaInfoRawStringUn
+              }
+          } catch (e: Exception) {
+              Logger.e(TAG, "Failed to unwrap twister object", e)
+              captchaInfoRawStringUn // Fallback to original
+          }
+      } else {
+          captchaInfoRawStringUn
+      }
 
     Logger.d(TAG, "captchaInfoRaw($chanDescriptor): $captchaInfoRawString")
 
@@ -532,6 +550,7 @@ class Chan4CaptchaLayoutViewModel : BaseViewModel() {
           if (ticketResp.isNotNullNorEmpty()) {
             append("&ticket_resp=${ticketResp}")
           }
+            append("&mode=init")
         }
         is ChanDescriptor.ThreadDescriptor -> {
           append("https://sys.4chan.org/captcha?board=${boardCode}&thread_id=${chanDescriptor.threadNo}")
@@ -543,6 +562,7 @@ class Chan4CaptchaLayoutViewModel : BaseViewModel() {
           if (ticketResp.isNotNullNorEmpty()) {
             append("&ticket_resp=${ticketResp}")
           }
+            append("&mode=init")
         }
       }
     }
