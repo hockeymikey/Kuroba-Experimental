@@ -2,38 +2,55 @@ name: Build and Sign Android APK
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop ] # Triggers whenever you push to the 'develop' branch
+
+permissions:
+  contents: write # REQUIRED: Allows the action to upload files to Releases
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
-        fetch-depth: '0'
+        fetch-depth: '0' # vital for calculating commit history
+
     - name: Set up JDK 17
-      uses: actions/setup-java@v2
+      uses: actions/setup-java@v3
       with:
         java-version: '17'
-        distribution: 'adopt'
+        distribution: 'temurin'
+
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: '3.x'
-    - name: Install/Upgrade pip and requests
+
+    - name: Install Python Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install requests
+
     - name: Decode Keystore File
+      # Decodes the base64 secret back into a file
       run: |
-        echo ${{ secrets.KEYSTORE }} | base64 -d > ${{ github.workspace }}/kurobaex.jks
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > kurobaex.jks
+
     - name: Build and Sign APK
+      # Note: I removed 'cd Kuroba' assuming your build.gradle is in the root.
+      # If your project is inside a subfolder, put 'cd YourSubfolderName' back.
       run: |
-        cd Kuroba
         chmod +x ./gradlew
-        ./gradlew assembleBetaRelease -Pandroid.injected.signing.store.file=${{ github.workspace }}/kurobaex.jks -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
-    - name: Create release
-      run: |
-        python ${{ github.workspace }}/.github/workflows/create_release.py
+        ./gradlew assembleBetaRelease \
+          -Pandroid.injected.signing.store.file=$(pwd)/kurobaex.jks \
+          -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+          -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+          -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+
+    - name: Create Release
       env:
-        PAT: ${{ secrets.PAT }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub
+        GITHUB_REPOSITORY: ${{ github.repository }} # Automatically passes 'YourName/YourRepo'
+      run: |
+        python .github/workflows/create_release.py

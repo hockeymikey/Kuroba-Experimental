@@ -3,159 +3,120 @@ import requests
 import json
 import re
 import subprocess
+import sys
+
+# --- CONFIGURATION ---
+# This pulls your repo name (e.g. "YourName/YourRepo") automatically from the Action
+REPO_NAME = os.getenv('GITHUB_REPOSITORY') 
+# Path to your APK. Check if this matches your actual build output!
+ASSET_PATH = 'app/build/outputs/apk/beta/release/KurobaEx-beta.apk'
+# ---------------------
 
 def create_github_release(token, repo, tag_name, release_name, body, asset_path):
     url = f"https://api.github.com/repos/{repo}/releases"
-
-    headers = {
-        "Authorization": f"token {token}",
-        "Content-Type": "application/json"
-    }
-
+    headers = { "Authorization": f"token {token}", "Content-Type": "application/json" }
+    
     payload = {
         "tag_name": tag_name,
         "name": release_name,
         "body": body,
         "draft": False,
-        "prerelease": False
+        "prerelease": True # Set to True since this is a beta build
     }
 
+    print(f"Creating release {tag_name}...")
     response = requests.post(url, headers=headers, data=json.dumps(payload))
 
     if response.status_code != 201:
-        print("Failed to create release.")
-        print(response.status_code)
+        print(f"Failed to create release. Status: {response.status_code}")
         print(response.content)
-        exit(-1)
+        sys.exit(1)
 
     print("Release created successfully.")
     upload_url = response.json()["upload_url"].split("{")[0]
     upload_asset(upload_url, asset_path, headers)
 
 def upload_asset(upload_url, asset_path, headers):
-    headers["Content-Type"] = "application/octet-stream"
+    if not os.path.exists(asset_path):
+        print(f"Error: Asset file not found at {asset_path}")
+        sys.exit(1)
 
+    headers["Content-Type"] = "application/vnd.android.package-archive"
     file_name = os.path.basename(asset_path)
     asset_url = f"{upload_url}?name={file_name}"
 
+    print(f"Uploading {file_name}...")
     with open(asset_path, "rb") as file:
         file_data = file.read()
 
     response = requests.post(asset_url, headers=headers, data=file_data)
-
     if response.status_code != 201:
-        print("Failed to upload asset.")
-        print(response.status_code)
-        print(response.content)
-        exit(-1)
-
+        print(f"Failed to upload asset. Status: {response.status_code}")
+        sys.exit(1)
+    
     print("Asset uploaded successfully.")
 
-def get_latest_release_tag(owner_repo):
+def get_latest_release_tag(owner_repo, token):
     url = f"https://api.github.com/repos/{owner_repo}/releases/latest"
-    response = requests.get(url)
+    headers = { "Authorization": f"token {token}" }
+    response = requests.get(url, headers=headers)
+    
     if response.status_code == 200:
         return response.json()['tag_name']
     else:
-        return f"Error: {response.status_code}"
+        return None # No releases found
 
-def get_new_tag_name(repo):
-    tag_name = get_latest_release_tag(repo)
-    print(f"get_new_tag_name() tag_name: {tag_name}")
-
-    pattern = r'v(\d+?)\.(\d{1,2})\.(\d{1,2})(?:\.(\d+))?-beta$'
+def generate_next_tag(repo, token):
+    current_tag = get_latest_release_tag(repo, token)
     
-    match = re.search(pattern, tag_name)
+    # FALLBACK: If no tags exist yet, start with this one
+    if not current_tag:
+        print("No previous tags found. Starting v1.0.0.0-beta")
+        return "v1.0.0.0-beta"
+
+    print(f"Found previous tag: {current_tag}")
+    
+    # Regex to parse vX.Y.Z.N-beta
+    pattern = r'v(\d+)\.(\d+)\.(\d+)\.(\d+)-beta'
+    match = re.search(pattern, current_tag)
+    
     if match:
-        groups = match.groups()
-        last_group = groups[-1]
-        
-        if last_group is not None:
-            incremented = int(last_group) + 1
-        else:
-            incremented = 0
-        
-        new_version = f"v{groups[0]}.{groups[1]}.{groups[2]}.{incremented}-beta"
-        return new_version
+        groups = list(match.groups())
+        # Increment the last number
+        groups[3] = str(int(groups[3]) + 1)
+        new_tag = f"v{groups[0]}.{groups[1]}.{groups[2]}.{groups[3]}-beta"
+        return new_tag
     else:
-        return ""
-    
-def get_commits_since(commit_hash, repo_path=None):
-    if repo_path:
-        os.chdir(repo_path)
-    
-    cmd = ["git", "log", f"{commit_hash}..HEAD", "--pretty=format:%s", "--date=local"]
-    all_commits = ""
-    
+        # If tag format changed, just append a timestamp or fail safely
+        print("Error: Previous tag format does not match vX.X.X.X-beta")
+        return f"{current_tag}-next"
+
+def get_commit_logs():
+    # Gets the last 10 commits for the changelog
+    cmd = ["git", "log", "-n", "10", "--pretty=format:- %s"]
     try:
-        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
-        
-        commits = output.strip().split('\n')
-        commit_counter = 0
-
-        for commit in commits:
-            if commit_counter > 10:
-                break
-
-            if commit.startswith('Merge'):
-                continue
-
-            all_commits += f"- {commit}\n"
-            commit_counter += 1
-
-        return all_commits
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to get commits: {e.output}")
-        return ""
-
-def get_latest_release_commit_hash(repo, access_token=None):
-    releases_url = f"https://api.github.com/repos/{repo}/releases/latest"
-    release_response = requests.get(releases_url)
-
-    if release_response.status_code == 200:
-        release_data = release_response.json()
-        tag_name = release_data['tag_name']
-
-        tags_url = f"https://api.github.com/repos/{repo}/git/refs/tags/{tag_name}"
-        tag_response = requests.get(tags_url)
-
-        if tag_response.status_code == 200:
-            tag_data = tag_response.json()
-            commit_hash = tag_data['object']['sha']
-            return commit_hash
-
-    return ""
+        output = subprocess.check_output(cmd, text=True)
+        return output
+    except Exception as e:
+        print(f"Error getting git logs: {e}")
+        return "No changelog available."
 
 if __name__ == "__main__":
-    tag_name = get_new_tag_name('K1rakishou/Kuroba-Experimental-beta')
-    if (len(tag_name) == 0):
-        print("Failed to get the release tag.")
-        exit(-1)
+    token = os.getenv('GITHUB_TOKEN')
+    if not token:
+        print("Error: GITHUB_TOKEN is missing.")
+        sys.exit(1)
 
-    latest_release_commit_hash = get_latest_release_commit_hash('K1rakishou/Kuroba-Experimental')
-    if (len(latest_release_commit_hash) == 0):
-         print("Failed to get latest release commit hash.")
-         exit(-1)
+    if not REPO_NAME:
+        print("Error: GITHUB_REPOSITORY env var is missing.")
+        sys.exit(1)
 
-    commits = get_commits_since(latest_release_commit_hash)
+    new_tag = generate_next_tag(REPO_NAME, token)
+    print(f"Calculated new tag: {new_tag}")
 
-    print(f'tag_name: {tag_name}')
-    print(f'commits:\n{commits}')
-
-    repo = 'K1rakishou/Kuroba-Experimental-beta'
-    release_name = f'KurobaEx-beta release {tag_name}'
-
-    body = ""
-    if (len(commits) > 0):
-        body = f'New release available. It includes the following commits:\n{commits}'
-    else:
-        body = f'New release available.'
-
-    asset_path = 'Kuroba/app/build/outputs/apk/beta/release/KurobaEx-beta.apk'
-
-    token = os.getenv('PAT')
-    if (len(token) == 0):
-        print("Token is empty.")
-        exit(-1)
-
-    create_github_release(token, repo, tag_name, release_name, body, asset_path)
+    commits = get_commit_logs()
+    
+    release_title = f"KurobaEx-beta {new_tag}"
+    body = f"Automated Beta Release.\n\nChanges:\n{commits}"
+    
+    create_github_release(token, REPO_NAME, new_tag, release_title, body, ASSET_PATH)
