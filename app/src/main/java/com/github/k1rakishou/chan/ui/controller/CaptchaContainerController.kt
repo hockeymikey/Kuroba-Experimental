@@ -94,15 +94,6 @@ class CaptchaContainerController(
 
     var postAuthentication = site.actions().postAuthenticate()
 
-      if (postAuthentication.type == SiteAuthentication.Type.ENDPOINT_BASED_CAPTCHA) {
-          val boardCode = chanDescriptor.boardCode()
-          // Construct the URL that works in your browser
-          val realUrl = "https://sys.4chan.org/captcha?board=$boardCode"
-
-          // Swap to GENERIC_WEBVIEW mode
-          postAuthentication = SiteAuthentication.fromUrl(realUrl, null, null)
-      }
-
     if (afterPostingAttempt && postAuthentication.type == SiteAuthentication.Type.CAPTCHA2_INVISIBLE) {
       if (site is Dvach) {
         postAuthentication = site.captchaV2NoJs
