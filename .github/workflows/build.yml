@@ -34,8 +34,10 @@ jobs:
 
     - name: Decode Keystore File
       # Decodes the base64 secret back into a file
+      env:
+        ENCODED_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > kurobaex.jks
+        echo "$ENCODED_KEYSTORE" | base64 -d > kurobaex.jks
 
     - name: Build and Sign APK
       # Note: I removed 'cd Kuroba' assuming your build.gradle is in the root.
