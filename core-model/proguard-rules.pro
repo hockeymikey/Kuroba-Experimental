@@ -1,0 +1,1 @@
+-dontwarn com.github.k1rakishou.common.DoNotStrip
